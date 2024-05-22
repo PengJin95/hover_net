@@ -33,6 +33,9 @@ def update_nested_dict(orig_dict, new_dict):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--gpu', type=str, default='0,1')
+    parser.add_argument('--syn_suffix', type=str, default=None)
+    parser.add_argument('--name', type=str, default='qkv')
+    parser.add_argument('--template', type=str, default='param/template.yaml')
 
     args = parser.parse_args()
     # print(args)
@@ -43,16 +46,19 @@ if __name__ == "__main__":
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
     FOLD_IDX = 0
-    WORKSPACE_DIR = 'exp_output/local'
-    SAVE_ROOT = f'{WORKSPACE_DIR}/models/baseline/'
+    WORKSPACE_DIR = '/fs/ess/PCON0521/pjin/hovernet_exp'
+    SAVE_ROOT = f'{WORKSPACE_DIR}/lizard/'
 
-    splits = joblib.load('splits.dat')
+    # splits = joblib.load('splits.dat')
 
     def run_one_split_with_param_set(save_path, split_info, param_kwargs):
         mkdir(save_path)
 
-        template_paramset = load_yaml('param/template.yaml')
-
+        template_paramset = load_yaml(args.template)
+        if args.syn_suffix is not None:
+            template_paramset['epoch_factor'] = 1 # 0.5
+        else:
+            template_paramset['epoch_factor'] = 2
         # repopulate loader arg according to available subset info
         template_loader_kwargs = template_paramset['loader_kwargs']
         loader_kwargs = {
@@ -99,13 +105,19 @@ if __name__ == "__main__":
                 importlib.import_module('models.hovernet.targets'),
                 'gen_targets'
             )
-            img_path = f'{WORKSPACE_DIR}/data/images.npy'
-            ann_path = f'{WORKSPACE_DIR}/data/labels.npy'
-            indices = split_info[subset_name]
+            img_path = f'/fs/ess/PCON0521/pjin/Lizard/images_{subset_name}.npy'
+            ann_path = f'/fs/ess/PCON0521/pjin/Lizard/labels_{subset_name}.npy'
+            if subset_name == 'train' and args.syn_suffix is not None:
+                img_syn_path = f'/fs/ess/PCON0521/pjin/fake_Lizard/images_{args.syn_suffix}.npy'
+            else:
+                img_syn_path = None
+            # indices = split_info[subset_name]
+            print('img_syn_path:', img_syn_path)
             return FileLoader(
                         img_path,
                         ann_path,
-                        indices,
+                        None, #indices
+                        img_syn_path=img_syn_path,
                         with_type=True,
                         input_shape=[256, 256],
                         mask_shape=[256, 256],
@@ -126,6 +138,7 @@ if __name__ == "__main__":
         trainer = RunManager(**run_kwargs)
         trainer.run()
 
-    save_path_ = f'{SAVE_ROOT}/{FOLD_IDX:02d}/'
-    split_info = splits[FOLD_IDX]
+    save_path_ = f'{SAVE_ROOT}/{args.name}/'
+    # split_info = splits[FOLD_IDX]
+    split_info = {'train': [], 'val': []}
     run_one_split_with_param_set(save_path_, split_info, {})

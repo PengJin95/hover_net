@@ -214,6 +214,8 @@ class RunManager(object):
         logging.info('\n')
         logging.info("#" * 16)
         logging.info('\n')
+        del net_run_info
+        torch.cuda.empty_cache()
         return
 
     ####
@@ -230,8 +232,9 @@ class RunManager(object):
                 save_path = self.log_dir
             else:
                 save_path = self.log_dir + '/%02d' % (phase_idx)
-            self._run_once(
-                phase_info, engine_opt, save_path,
-                prev_log_dir=prev_save_path)
+            if phase_idx != 2:
+                self._run_once(
+                    phase_info, engine_opt, save_path,
+                    prev_log_dir=prev_save_path)
             prev_save_path = save_path
             self.phase_idx += 1

@@ -45,6 +45,7 @@ class FileLoader(torch.utils.data.Dataset):
         img_path,
         ann_path,
         indices=None,
+        img_syn_path=None,
         with_type=False,
         input_shape=None,
         mask_shape=None,
@@ -57,10 +58,18 @@ class FileLoader(torch.utils.data.Dataset):
         self.imgs = np.load(img_path, mmap_mode='r')
         self.anns = np.load(ann_path, mmap_mode='r')
 
-        self.indices = (
-            indices if indices is not None
-            else np.arange(0, self.imgs.shape[0])
-        )
+        if img_syn_path is not None:
+            assert indices is None
+            self.use_syn = True
+            self.imgs_syn = np.load(img_syn_path, mmap_mode='r')
+            self.indices = np.arange(0, self.imgs.shape[0] + self.imgs_syn.shape[0])
+            self.ori_size = self.imgs.shape[0]
+        else:
+            self.use_syn = False
+            self.indices = (
+                indices if indices is not None
+                else np.arange(0, self.imgs.shape[0])
+            )
 
         self.with_type = with_type
         self.mask_shape = mask_shape
@@ -86,7 +95,11 @@ class FileLoader(torch.utils.data.Dataset):
         idx = self.indices[idx]
 
         # RGB images
-        img = np.array(self.imgs[idx]).astype("uint8")
+        if self.use_syn and (idx >= self.ori_size):
+            idx -= self.ori_size
+            img = np.array(self.imgs_syn[idx]).astype("uint8")
+        else:
+            img = np.array(self.imgs[idx]).astype("uint8")
         # instance ID map and type map
         ann = np.array(self.anns[idx]).astype("int32")
 
@@ -103,6 +116,7 @@ class FileLoader(torch.utils.data.Dataset):
         feed_dict = {"img": img}
 
         inst_map = ann[..., 0]  # HW1 -> HW
+        feed_dict['inst_map'] = inst_map
         if self.with_type:
             type_map = (ann[..., 1]).copy()
             type_map = cropping_center(type_map, self.mask_shape)

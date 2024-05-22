@@ -120,8 +120,8 @@ class HoVerNetExt(nn.Module):
                 OrderedDict(
                     [
                         ("tp", create_decoder_branch(ksize=ksize, out_ch=num_types)),
-                        ("np", create_decoder_branch(ksize=ksize, out_ch=2)),
                         ("hv", create_decoder_branch(ksize=ksize, out_ch=2)),
+                        ("np", create_decoder_branch(ksize=ksize, out_ch=2)),
                     ]
                 )
             )

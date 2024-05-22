@@ -13,3 +13,5 @@ exp_output/
 *.npy
 *.dat
 *.pth
+
+jobs/
