@@ -43,7 +43,7 @@ def get_config(
                         # learning rate scheduler
                         'lr_scheduler': (
                             lambda opt, n_iter:
-                                optim.lr_scheduler.StepLR(opt, int(24*epoch_factor))),
+                                optim.lr_scheduler.StepLR(opt, 25//epoch_factor)),
 
                         "extra_info": {
                             "loss": {
@@ -66,7 +66,7 @@ def get_config(
 
                 'loader': loader_kwargs,
 
-                'nr_epochs': int(50*epoch_factor),
+                'nr_epochs': 50//epoch_factor,
             },
             {
                 'run_info': {
@@ -87,7 +87,7 @@ def get_config(
                         # learning rate scheduler
                         'lr_scheduler': (
                             lambda opt, n_iter:
-                                optim.lr_scheduler.StepLR(opt, int(24*epoch_factor))),
+                                optim.lr_scheduler.StepLR(opt, 25//epoch_factor)),
 
                         "extra_info": {
                             "loss": {
@@ -110,7 +110,7 @@ def get_config(
 
                 'loader': loader_kwargs,
 
-                'nr_epochs': int(50*epoch_factor),
+                'nr_epochs': 50//epoch_factor,
             },
         ],
 

@@ -32,9 +32,14 @@ def update_nested_dict(orig_dict, new_dict):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process some integers.')
-    parser.add_argument('--gpu', type=str, default='0,1')
-    parser.add_argument('--syn_suffix', type=str, default=None)
+    parser.add_argument('--gpu', type=str, default='0')
+    parser.add_argument('-e', '--epoch', type=int, default=60, help='diffusion fine-tuned epoch, for locating checkpoint')
+    parser.add_argument('-s', '--step', type=int, default=10000, help='diffusion fine-tuned step, for locating checkpoint')
+    parser.add_argument('--syn_suffix', nargs='+', default=None, help='suffix of fake images (.npy) ')
+    parser.add_argument('--syn_suffix_anno', nargs='+', default=None, help='suffix of gt masks of fake images (.npy)')
+    parser.add_argument('-sas', '--syn_anno_same', action='store_true', help='whether use the same mask (e.g. train on fold1, fake fold1)')
     parser.add_argument('--name', type=str, default='qkv')
+    parser.add_argument('--epoch_factor', type=float, default=1., help='to keep the same number of trainig steps (e.g. "2" for 100 percent augmentation)')
     parser.add_argument('--template', type=str, default='param/template.yaml')
 
     args = parser.parse_args()
@@ -46,8 +51,8 @@ if __name__ == "__main__":
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
     FOLD_IDX = 0
-    WORKSPACE_DIR = '/fs/ess/PCON0521/pjin/hovernet_exp'
-    SAVE_ROOT = f'{WORKSPACE_DIR}/lizard/'
+    WORKSPACE_DIR = '/data/peng/hover_net/exp'
+    SAVE_ROOT = f'{WORKSPACE_DIR}/pannuke/'
 
     # splits = joblib.load('splits.dat')
 
@@ -55,10 +60,7 @@ if __name__ == "__main__":
         mkdir(save_path)
 
         template_paramset = load_yaml(args.template)
-        if args.syn_suffix is not None:
-            template_paramset['epoch_factor'] = 1 # 0.5
-        else:
-            template_paramset['epoch_factor'] = 2
+        template_paramset['epoch_factor'] = args.epoch_factor
         # repopulate loader arg according to available subset info
         template_loader_kwargs = template_paramset['loader_kwargs']
         loader_kwargs = {
@@ -105,12 +107,28 @@ if __name__ == "__main__":
                 importlib.import_module('models.hovernet.targets'),
                 'gen_targets'
             )
-            img_path = f'/fs/ess/PCON0521/pjin/Lizard/images_{subset_name}.npy'
-            ann_path = f'/fs/ess/PCON0521/pjin/Lizard/labels_{subset_name}.npy'
-            if subset_name == 'train' and args.syn_suffix is not None:
-                img_syn_path = f'/fs/ess/PCON0521/pjin/fake_Lizard/images_{args.syn_suffix}.npy'
+            print(subset_name)
+            # img_path = f'/data/peng/datasets/Lizard/images_{subset_name}.npy'
+            # ann_path = f'/data/peng/datasets/Lizard/labels_{subset_name}.npy'
+            img_path = f'/data/peng/datasets/PanNuke/images_{subset_name}.npy'
+            ann_path = f'/data/peng/datasets/PanNuke/masks_{subset_name}.npy'
+            if 'train' in subset_name and args.syn_suffix is not None:
+                img_syn_path = [f'/data/peng/HistoDiffAug/fake_PanNuke/images_qkv_{args.epoch}_{args.step}_fold{suffix}.npy'
+                                for suffix in args.syn_suffix]
+                if args.syn_suffix_anno is not None:
+                    ann_syn_path = [
+                        f'/data/peng/datasets/PanNuke/masks{suffix}.npy'
+                        for suffix in args.syn_suffix_anno]
+                else:
+                    assert args.syn_anno_same is True
+                    ann_syn_path = None
+                # img_syn_path = [f'/data/peng/HistoDiffAug/fake_Lizard_400/images_{suffix}.npy'
+                #                 for suffix in args.syn_suffix]
+                # img_syn_path = f'/data/peng/HistoDiffAug/fake_Lizard/images_{args.syn_suffix}.npy'
+
             else:
                 img_syn_path = None
+                ann_syn_path = None
             # indices = split_info[subset_name]
             print('img_syn_path:', img_syn_path)
             return FileLoader(
@@ -118,6 +136,7 @@ if __name__ == "__main__":
                         ann_path,
                         None, #indices
                         img_syn_path=img_syn_path,
+                        ann_syn_path=ann_syn_path,
                         with_type=True,
                         input_shape=[256, 256],
                         mask_shape=[256, 256],

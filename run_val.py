@@ -20,32 +20,41 @@ from metrics.stats_utils import (
     pair_coordinates
 )
 
+import os
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process some integers.')
-    parser.add_argument('--gpu', type=int, default=0)
-    parser.add_argument('--name', type=str, default='qkv_100_25k_run2')
+    parser.add_argument('--gpu', type=int, default=1)
+    parser.add_argument('--name', type=str, default='qkv_100_2k')
     parser.add_argument('--phase', type=str, default='01')
     parser.add_argument('--epoch', type=int, default=50)
     parser.add_argument('--batch_size', type=int, default=24)
-    
+    parser.add_argument('--n_classes', type=int, default=6)
+
+    parser.add_argument('--infer_part', type=str, default='test')
     parser.add_argument('--template', type=str, default='param/template.yaml')
     args = parser.parse_args()
 
     device = torch.device('cuda:%d' % args.gpu)
     
-    WORKSPACE_DIR = '/fs/ess/PCON0521/pjin/hovernet_exp'
-    save_path_ = f'{WORKSPACE_DIR}/lizard/{args.name}/'
-    model = create_model(num_types=7, pretrained_backbone='/users/PAS2606/pqj5125/hover_net/resnet50-0676ba61.pth').to(device)
+    WORKSPACE_DIR = 'exp'
+    save_path_ = f'{WORKSPACE_DIR}/pannuke/{args.name}/'
+    model = create_model(num_types=args.n_classes, pretrained_backbone='resnet50-0676ba61.pth').to(device)
 
     state_dict = torch.load(f'{save_path_}/model/{args.phase}/net_epoch={args.epoch}.tar', map_location='cpu')["desc"]
     state_dict = convert_pytorch_checkpoint(state_dict)
     model.load_state_dict(state_dict, strict=False)
     model.eval()
 
+
     dataset = FileLoader(
-        img_path='/fs/ess/PCON0521/pjin/Lizard/images_val.npy',
-        ann_path='/fs/ess/PCON0521/pjin/Lizard/labels_val.npy',
+        # img_path='/data/peng/datasets/Lizard/images_val.npy',
+        # ann_path='/data/peng/datasets/Lizard/labels_val.npy',
+        # img_path='/data/peng/datasets/PanNuke/images_test.npy',
+        # ann_path='/data/peng/datasets/PanNuke/masks_test.npy',
+        img_path=f'/data/peng/datasets/PanNuke/images_{args.infer_part}.npy',
+        ann_path=f'/data/peng/datasets/PanNuke/masks_{args.infer_part}.npy',
         with_type=True,
         input_shape=[256, 256],
         mask_shape=[256, 256],
@@ -56,31 +65,31 @@ if __name__ == "__main__":
     dataloader = DataLoader(dataset, num_workers=4, batch_size=args.batch_size, shuffle=False, drop_last=False)
 
     with torch.no_grad():
-        metrics = [[], [], [], [], [], []]
-        metrics2 = [[], [], [], [], [], []]
+        metrics = [[] for _ in range(1, args.n_classes)]
+        # metrics2 = [[] for _ in range(1, args.n_classes)]
         for i, batch_data in tqdm(enumerate(dataloader)):
             imgs = batch_data["img"].permute(0, 3, 1, 2).contiguous()
             imgs = imgs.to(device).type(torch.float32)
             pred_dict = model(imgs) # tp, hv, np
             outputs = [pred_dict['np'], pred_dict['hv'], pred_dict['tp']]
 
-            preds_detection, preds_classification = post_process_batch_hovernet(outputs, 7)
+            preds_detection, preds_classification = post_process_batch_hovernet(outputs, args.n_classes)
             
             true_inst = batch_data['inst_map'] # NHW
             true_segm = batch_data['tp_map'] # NHW
             for j in range(imgs.shape[0]):
                 if len(list(np.unique(true_inst[j]))) == 1:
                     continue
-                for k in range(1, 7):
+                for k in range(1, args.n_classes):
                     pred = preds_detection[j] * (preds_classification[j, k] > 0)
                     pred = remap_label(pred, by_size=False)
                     true = true_inst[j] * (true_segm[j] == k)
                     true = remap_label(true, by_size=False)
                     if len(list(np.unique(true))) == 1:
                         continue
-                    # pq_info = get_fast_pq(true, pred, match_iou=0.5)[0]
-                    # metrics[k-1].append(pq_info[2])
-                    metrics[k-1].append(get_dice_1(true, pred))
+                    pq_info = get_fast_pq(true, pred, match_iou=0.5)[0]
+                    metrics[k-1].append(pq_info[2])
+                    # metrics[k-1].append(get_dice_1(true, pred))
                     # metrics2[k-1].append(get_fast_dice_2(true, pred))
                 # pred = remap_label(preds_detection[j], by_size=False)
                 # true = remap_label(true_inst[j], by_size=False)
@@ -95,6 +104,10 @@ if __name__ == "__main__":
         
         print('%.5f' % np.mean([np.mean(m) for m in metrics]))
         print('%.5f' % np.mean([m for metric in metrics for m in metric]))
+
+        import pickle
+        with open('metrics.pkl', 'wb') as f:
+            pickle.dump(metrics, f)
         # print('%.5f' % np.mean([np.mean(m) for m in metrics2]))
         # print('%.5f' % np.mean([m for metric in metrics2 for m in metric]))        
         # metrics = np.array(metrics)

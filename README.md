@@ -1,5 +1,16 @@
 ![](docs/conic_banner.png)
 
+# Run Code
+* Traininig
+```python
+python -W ignore run.py --gpu 0 --name qkv --epoch_factor 2 --syn_suffix 1 
+```
+* Evaluation
+```python
+taskset --cpu-list 0-3 python -W ignore run_val.py --name qkv --epoch 25 --gpu 0 
+```
+
+
 # Training HoVer-Net for CoNIC Challenge
 
 This branch is dedicated to training the HoVer-Net for the [CoNIC challenge](https://conic-challenge.grand-challenge.org/). All parameters are hard-coded and are expected to work out of the box, as long as users follow the preparation steps mentioned below:
@@ -34,6 +45,14 @@ images are loaded and pre-processed (this include generating ground-truth from a
 conda env create -f environment.yml
 conda activate hovernet
 pip install torch==1.10.1+cu102 torchvision==0.11.2+cu102 torchaudio===0.10.1+cu102 -f https://download.pytorch.org/whl/cu102/torch_stable.html
+
+# Note by Peng:
+pip install PyYAML
+pip install ruamel.yaml
+
+For A100:
+conda install pytorch==1.10.1 torchvision==0.11.2 torchaudio==0.10.1 cudatoolkit=11.3 -c pytorch -c conda-forge
+
 ```
 
 Above, we install PyTorch version 1.10.1 with CUDA 10.2. 
